@@ -4,7 +4,6 @@ $ds = DIRECTORY_SEPARATOR;
 $base_dir = realpath(dirname(__FILE__) . $ds . '..') . $ds;
 
 require_once "{$base_dir}includes{$ds}Database.php";
-//require_once "{$base_dir}includes{$ds}Bcrypt.php";//including bycrypt for password hashing
 
 class Seller
 {
@@ -19,19 +18,19 @@ class Seller
     public $address;
     public $description;
 
-    // ✅ constructor with dependency injection
+    // Constructor (Dependency Injection)
     public function __construct($database)
     {
         $this->db = $database;
     }
 
-    // validate params
+    // Validate parameters
     public function validate_params($value)
     {
-        return !empty(trim($value));
+        return isset($value) && trim($value) !== '';
     }
 
-    // check unique email
+    // Check if email is unique
     public function check_unique_email()
     {
         $email = $this->db->escape_value($this->email);
@@ -43,12 +42,17 @@ class Seller
         return empty($row);
     }
 
-    // register seller
+    // Register seller (bcrypt hashing)
     public function register_seller()
     {
         $name = $this->db->escape_value($this->name);
         $email = $this->db->escape_value($this->email);
-        $password = password_hash($this->password, PASSWORD_BCRYPT);
+
+        // ✅ bcrypt hashing
+        $password = password_hash($this->password, PASSWORD_BCRYPT, [
+            'cost' => 12
+        ]);
+
         $image = $this->db->escape_value($this->image ?? '');
         $address = $this->db->escape_value($this->address);
         $description = $this->db->escape_value($this->description);
@@ -61,12 +65,24 @@ class Seller
         return $this->db->query($sql);
     }
 
-    // login
+    // Login seller
     public function login()
     {
         $email = $this->db->escape_value($this->email);
 
-        $sql = "SELECT * FROM {$this->table} WHERE email = '$email' LIMIT 1";
+        // 🔥 IMPORTANT FIX: alias PASSWORD → password
+        $sql = "SELECT 
+                    id,
+                    name,
+                    email,
+                    PASSWORD AS password,
+                    image,
+                    address,
+                    description
+                FROM {$this->table}
+                WHERE email = '$email'
+                LIMIT 1";
+
         $result = $this->db->query($sql);
         $seller = $this->db->fetch_row($result);
 
@@ -74,6 +90,7 @@ class Seller
             return "Seller doesn't exist.";
         }
 
+        // ✅ bcrypt verification
         if (password_verify($this->password, $seller['password'])) {
             unset($seller['password']);
             return $seller;
@@ -82,7 +99,7 @@ class Seller
         return "Password doesn't match.";
     }
 
-    // get all sellers
+    // Get all sellers
     public function all_sellers()
     {
         $sql = "SELECT id, name, image, address FROM {$this->table}";
