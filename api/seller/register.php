@@ -5,7 +5,14 @@ header('Content-Type: application/json');
 header('Access-Control-Allow-Methods: POST');
 header('Access-Control-Allow-Headers: Origin, Content-Type, Accept');
 
-include_once '../../models/Sellers.php';
+require_once __DIR__ . '/../../includes/Database.php';
+require_once __DIR__ . '/../../models/Sellers.php';
+
+// ✅ Create Database object
+$database = new Database();
+
+// ✅ Create Seller object (THIS WAS MISSING)
+$seller = new Seller($database);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -14,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $seller->name = $_POST['name'];
     } else {
         echo json_encode(['success' => 0, 'message' => 'Name is required!']);
-        die();
+        exit;
     }
 
     // Email
@@ -22,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $seller->email = $_POST['email'];
     } else {
         echo json_encode(['success' => 0, 'message' => 'Email is required!']);
-        die();
+        exit;
     }
 
     // Password
@@ -30,72 +37,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $seller->password = $_POST['password'];
     } else {
         echo json_encode(['success' => 0, 'message' => 'Password is required!']);
-        die();
+        exit;
     }
 
-    // Saving picture
-    $seller_images_folder = '../../assets/seller_images/';
+    // Image upload
+    $seller_images_folder = __DIR__ . '/../../assets/seller_images/';
 
     if (!is_dir($seller_images_folder)) {
         mkdir($seller_images_folder, 0777, true);
     }
 
-    if (isset($_FILES['image'])) {
+    if (!empty($_FILES['image']['name'])) {
 
         $file_name = $_FILES['image']['name'];
         $file_tmp  = $_FILES['image']['tmp_name'];
-
-        // FIXED extension extraction
         $extension = pathinfo($file_name, PATHINFO_EXTENSION);
 
-        $new_file_name = $seller->email . "_profile." . $extension;
+        $new_file_name = time() . "_" . $seller->email . "." . $extension;
 
         move_uploaded_file($file_tmp, $seller_images_folder . $new_file_name);
 
-        // Store relative path
         $seller->image = "seller_images/" . $new_file_name;
+    } else {
+        $seller->image = null;
     }
 
-    // Read JSON input (if any)
-$input = json_decode(file_get_contents("php://input"), true);
-
-// Get address from either POST (form-data) or JSON
-$address = $_POST['address'] 
-           ?? $input['address'] 
-           ?? null;
-
-// Validate
-if ($seller->validate_params($address)) {
-    $seller->address = $address;
-} else {
-    echo json_encode(['success' => 0, 'message' => 'Address is required!']);
-    die();
-}
-
+    // Address
+    if ($seller->validate_params($_POST['address'] ?? null)) {
+        $seller->address = $_POST['address'];
+    } else {
+        echo json_encode(['success' => 0, 'message' => 'Address is required!']);
+        exit;
+    }
 
     // Description
     if ($seller->validate_params($_POST['description'] ?? null)) {
         $seller->description = $_POST['description'];
     } else {
         echo json_encode(['success' => 0, 'message' => 'Description is required!']);
-        die();
+        exit;
     }
 
     // Email uniqueness check
     if ($seller->check_unique_email()) {
 
         if ($seller->register_seller()) {
-            echo json_encode(['success' => 1, 'message' => 'Seller registered!']);
+            echo json_encode(['success' => 1, 'message' => 'Seller registered successfully']);
         } else {
             http_response_code(500);
-            echo json_encode(['success' => 0, 'message' => 'Internal Server Error']);
+            echo json_encode(['success' => 0, 'message' => 'Failed to register seller']);
         }
 
     } else {
-        http_response_code(401);
-        echo json_encode(['success' => 0, 'message' => 'Email already exists!']);
+        http_response_code(409);
+        echo json_encode(['success' => 0, 'message' => 'Email already exists']);
     }
 
 } else {
-    header('HTTP/1.1 405 Method Not Allowed');
+    http_response_code(405);
+    echo json_encode(['success' => 0, 'message' => 'Method Not Allowed']);
 }

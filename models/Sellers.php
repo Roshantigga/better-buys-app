@@ -1,14 +1,14 @@
 <?php
 
 $ds = DIRECTORY_SEPARATOR;
-$base_dir = realpath(dirname(__FILE__). $ds . '..') . $ds;
+$base_dir = realpath(dirname(__FILE__) . $ds . '..') . $ds;
 
-require_once("{$base_dir}includes{$ds}Database.php"); // Including database
-// require_once("{$base_dir}includes{$ds}Bcrypt.php"); // Including Bcrypt
+require_once "{$base_dir}includes{$ds}Database.php";
+//require_once "{$base_dir}includes{$ds}Bcrypt.php";//including bycrypt for password hashing
 
-// Class Seller Start
 class Seller
 {
+    private $db;
     private $table = 'sellers';
 
     public $id;
@@ -19,98 +19,74 @@ class Seller
     public $address;
     public $description;
 
-    // contructor
-    public function __construct()
+    // ✅ constructor with dependency injection
+    public function __construct($database)
     {
+        $this->db = $database;
     }
 
-    // validating if params exists or not
+    // validate params
     public function validate_params($value)
     {
-        return (!empty($value));
+        return !empty(trim($value));
     }
 
-    // to check if email is unique or not
+    // check unique email
     public function check_unique_email()
     {
-        global $database;
+        $email = $this->db->escape_value($this->email);
 
-        $this->email = trim(htmlspecialchars(strip_tags($this->email)));
+        $sql = "SELECT id FROM {$this->table} WHERE email = '$email' LIMIT 1";
+        $result = $this->db->query($sql);
+        $row = $this->db->fetch_row($result);
 
-        $sql = "SELECT id FROM $this->table WHERE email = '" .$database->escape_value($this->email). "'";
-
-        $result = $database->query($sql);
-        $user_id = $database->fetch_row($result);
-
-        return empty($user_id);
+        return empty($row);
     }
 
-    // saving new data in our database
+    // register seller
     public function register_seller()
     {
-        global $database;
+        $name = $this->db->escape_value($this->name);
+        $email = $this->db->escape_value($this->email);
+        $password = password_hash($this->password, PASSWORD_BCRYPT);
+        $image = $this->db->escape_value($this->image ?? '');
+        $address = $this->db->escape_value($this->address);
+        $description = $this->db->escape_value($this->description);
 
-        $this->name = trim(htmlspecialchars(strip_tags($this->name)));
-        $this->email = trim(htmlspecialchars(strip_tags($this->email)));
-        $this->password = trim(htmlspecialchars(strip_tags($this->password)));
-        $this->image = trim(htmlspecialchars(strip_tags($this->image)));
-        $this->address = trim(htmlspecialchars(strip_tags($this->address)));
-        $this->description = trim(htmlspecialchars(strip_tags($this->description)));
+        $sql = "INSERT INTO {$this->table}
+                (name, email, password, image, address, description)
+                VALUES
+                ('$name', '$email', '$password', '$image', '$address', '$description')";
 
-        $sql = "INSERT INTO $this->table (name, email, password, image, address, description) VALUES (
-            '" .$database->escape_value($this->name). "',
-            '" .$database->escape_value($this->email). "',
-            '" .$database->escape_value(Bcrypt::hashPassword($this->password)). "',
-            '" .$database->escape_value($this->image). "',
-            '" .$database->escape_value($this->address). "',
-            '" .$database->escape_value($this->description). "'
-        )";
-
-        $seller_saved = $database->query($sql);
-
-        if ($seller_saved) {
-            return true;
-        } else {
-            return false;
-        }
+        return $this->db->query($sql);
     }
 
-    // login function
+    // login
     public function login()
     {
-        global $database;
+        $email = $this->db->escape_value($this->email);
 
-        $this->email = trim(htmlspecialchars(strip_tags($this->email)));
-        $this->password = trim(htmlspecialchars(strip_tags($this->password)));
+        $sql = "SELECT * FROM {$this->table} WHERE email = '$email' LIMIT 1";
+        $result = $this->db->query($sql);
+        $seller = $this->db->fetch_row($result);
 
-        $sql = "SELECT * FROM $this->table WHERE email = '" .$database->escape_value($this->email). "'";
-
-        $result = $database->query($sql);
-        $seller = $database->fetch_row($result);
-
-        if (empty($seller)) {
+        if (!$seller) {
             return "Seller doesn't exist.";
-        } else {
-            if (Bcrypt::checkPassword($this->password, $seller['password'])) {
-                unset($seller['password']);
-                return $seller;
-            } else {
-                return "Password doesn't match.";
-            }
         }
+
+        if (password_verify($this->password, $seller['password'])) {
+            unset($seller['password']);
+            return $seller;
+        }
+
+        return "Password doesn't match.";
     }
 
-    // method to return the list of seller
-    public function all_sellers() {
-        global $database;
-
-        $sql = "SELECT id, name, image, address FROM $this->table";
-
-        $result = $database->query($sql);
-
-        return $database->fetch_array($result);
+    // get all sellers
+    public function all_sellers()
+    {
+        $sql = "SELECT id, name, image, address FROM {$this->table}";
+        $result = $this->db->query($sql);
+        return $this->db->fetch_array($result);
     }
-} // Class Ends
-
-// Seller object
-$seller = new Seller();
+}
