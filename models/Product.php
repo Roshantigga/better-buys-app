@@ -28,6 +28,8 @@ class Product {
         return (!empty($value));
     }
 
+
+    ///stroring product details
     public function add_product() {
 
         $this->seller_id = htmlspecialchars(strip_tags(trim($this->seller_id)));
@@ -50,4 +52,22 @@ class Product {
 
         return $result ? true : false;
     }
+
+    //method to return the list of product per seller
+
+    public function get_products_by_seller($seller_id) {
+        $seller_id = $this->db->escape_value($seller_id);
+
+        $sql = "SELECT id, seller_id, name, image, price_per_kg, description, interaction_count 
+                FROM {$this->table} 
+                WHERE seller_id = '$seller_id'";
+
+        $result = $this->db->query($sql);
+
+        return $this->db->fetch_array($result);
+    }
 }
+//class end
+
+//object
+//$product = new Product();
